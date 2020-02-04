@@ -7,11 +7,19 @@
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <arpa/inet.h>
-#include <unistd.h> /** for fork **/
+#include <pthread.h>
 
+void *waiter(void *pArg) 
+{ 
+   int child_pid = *((int *)pArg);
+   int status;
+   (void)waitpid(child_pid, &status, 0);
+   return NULL;
+}
+
+#include <unistd.h> /** for fork **/
 #include <vector>
 #include <string>
-
 #define SERVPORT 8888 /*服务器监听端口号 */
 #define BACKLOG 10 /* 最大同时连接请求数 */
 std::vector<std::string> get_all_result(void);
@@ -44,7 +52,8 @@ int main(int ac,char **av)
 			continue;
 		}
 		printf("received a connection from %s\n", inet_ntoa(remote_addr.sin_addr));
-		if (!fork()) { /* 子进程代码段 */
+		int child_pid= fork();
+		if (!child_pid) { /* 子进程代码段 */
 			std::vector<std::string> all_result = get_all_result();
 			int count = all_result.size();
 			srand(time(NULL));
@@ -61,7 +70,13 @@ int main(int ac,char **av)
 				sleep(1);
 			}
 		}
-		/*TODO:wait for the new fork id */
+        else/* code of parent process */
+        {
+            /*TODO:wait for the new fork id */
+            pthread_t hThread;
+            pthread_create(&hThread, NULL, waiter, &child_pid);
+            pthread_detach(hThread);
+        }
 		close(client_fd);
 	}
 }
